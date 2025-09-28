@@ -162,9 +162,9 @@
                 <div className="result">
                     <div className="result-number">
                         {isComplete 
-                            ? '🎉 すべての番号を引き終わりました！' 
+                            ? 'すべての番号を引き終わりました！' 
                             : drawnNumber 
-                                ? `🎯 ${drawnNumber}` 
+                                ? `${drawnNumber}` 
                                 : '番号が表示されます'
                         }
                     </div>
@@ -300,7 +300,7 @@
 
             return (
                 <div className="container">
-                    <h1>🎯 くじ引きアプリ</h1>
+                    <h1>くじ引きアプリ</h1>
                     
                     <Settings 
                         minNum={minNum}
