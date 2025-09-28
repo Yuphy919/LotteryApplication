@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="くじ引きアプリ">
+    <meta name="format-detection" content="telephone=no">
+    <title>くじ引きアプリ</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .settings {
+            margin: 20px 0;
+        }
+        .settings label {
+            display: block;
+            margin: 10px 0 5px;
+            font-weight: bold;
+        }
+        .settings input {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 100px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 18px;
+            margin: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        #reset-btn {
+            background-color: #f44336;
+        }
+        #reset-btn:hover {
+            background-color: #da190b;
+        }
+        .result {
+            margin: 20px 0;
+            padding: 20px;
+            background-color: #e8f5e8;
+            border-radius: 5px;
+            min-height: 200px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .result-number {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        #qr-code {
+            margin: 10px 0;
+        }
+        #qr-code canvas {
+            border: 2px solid #4CAF50;
+            border-radius: 8px;
+        }
+        .remaining {
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // QRコードコンポーネント
+        const QRCodeDisplay = ({ number, isVisible }) => {
+            const qrRef = useRef(null);
+
+            useEffect(() => {
+                if (isVisible && number !== null && qrRef.current) {
+
+                    // QRコードをクリア
+                    qrRef.current.innerHTML = '';
+                    
+                    // canvas に描く例
+                    const canvas = document.createElement('canvas');
+                    QRCode.toCanvas(canvas, 'https://yuphy919.github.io/LotteryResultsDisplay/?id=' + number, {
+                        errorCorrectionLevel: 'H', // L, M, Q, H
+                        margin: 2,
+                        scale: 6
+                    });
+
+                    qrRef.current.appendChild(canvas);
+
+                } else if (!isVisible && qrRef.current) {
+                    qrRef.current.innerHTML = '';
+                }
+            }, [number, isVisible]);
+
+            return <div id="qr-code" ref={qrRef}></div>;
+        };
+
+        // 設定コンポーネント
+        const Settings = ({ minNum, maxNum, onMinChange, onMaxChange }) => {
+            return (
+                <div className="settings">
+                    <label htmlFor="min-num">最小値:</label>
+                    <input 
+                        type="number" 
+                        id="min-num" 
+                        value={minNum} 
+                        min="1"
+                        onChange={(e) => onMinChange(parseInt(e.target.value) || 1)}
+                    />
+                    
+                    <label htmlFor="max-num">最大値:</label>
+                    <input 
+                        type="number" 
+                        id="max-num" 
+                        value={maxNum} 
+                        min="1"
+                        onChange={(e) => onMaxChange(parseInt(e.target.value) || 1)}
+                    />
+                </div>
+            );
+        };
+
+        // 結果表示コンポーネント
+        const Result = ({ drawnNumber, isComplete, qrCodeNumber }) => {
+            return (
+                <div className="result">
+                    <div className="result-number">
+                        {isComplete 
+                            ? '🎉 すべての番号を引き終わりました！' 
+                            : drawnNumber 
+                                ? `🎯 ${drawnNumber}` 
+                                : '番号が表示されます'
+                        }
+                    </div>
+                    <QRCodeDisplay 
+                        number={qrCodeNumber} 
+                        isVisible={drawnNumber !== null && !isComplete} 
+                    />
+                </div>
+            );
+        };
+
+        // 履歴表示コンポーネント
+        const History = ({ usedNumbers }) => {
+            return (
+                <div style={{
+                    marginTop: '20px',
+                    padding: '15px',
+                    backgroundColor: '#f8f9fa',
+                    borderRadius: '5px',
+                    border: '1px solid #e9ecef'
+                }}>
+                    <h3 style={{ margin: '0 0 10px 0', fontSize: '16px', color: '#666' }}>
+                        引いた番号の履歴
+                    </h3>
+                    <div style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '5px',
+                        minHeight: '30px'
+                    }}>
+                        {usedNumbers.length === 0 ? (
+                            <span style={{ color: '#999', fontStyle: 'italic' }}>
+                                まだ番号が引かれていません
+                            </span>
+                        ) : (
+                            usedNumbers.map((num, index) => (
+                                <span 
+                                    key={index}
+                                    style={{
+                                        backgroundColor: '#4CAF50',
+                                        color: 'white',
+                                        padding: '4px 8px',
+                                        borderRadius: '12px',
+                                        fontSize: '12px',
+                                        fontWeight: 'bold'
+                                    }}
+                                >
+                                    {num}
+                                </span>
+                            ))
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        // メインのくじ引きアプリコンポーネント
+        const LotteryApp = () => {
+            const [usedNumbers, setUsedNumbers] = useState([]);
+            const [minNum, setMinNum] = useState(1);
+            const [maxNum, setMaxNum] = useState(10);
+            const [drawnNumber, setDrawnNumber] = useState(null);
+            const [qrCodeNumber, setQrCodeNumber] = useState(null);
+            const [isComplete, setIsComplete] = useState(false);
+
+            // 利用可能な数字の配列を生成
+            const generateAvailableNumbers = (min, max) => {
+                const numbers = [];
+                for (let i = min; i <= max; i++) {
+                    numbers.push(i);
+                }
+                return numbers;
+            };
+
+            // ランダムかつユニークな数字を取得
+            const getRandomUniqueNumber = (min, max) => {
+                const availableNumbers = generateAvailableNumbers(min, max)
+                    .filter(num => !usedNumbers.includes(num));
+                
+                if (availableNumbers.length === 0) {
+                    return null;
+                }
+                
+                const randomIndex = Math.floor(Math.random() * availableNumbers.length);
+                return availableNumbers[randomIndex];
+            };
+
+            // 残り数を計算
+            const getRemainingCount = () => {
+                const totalNumbers = maxNum - minNum + 1;
+                return totalNumbers - usedNumbers.length;
+            };
+
+            // くじ引きを実行
+            const drawNumber = () => {
+                // 入力値の検証
+                if (minNum > maxNum) {
+                    alert('最小値は最大値以下である必要があります。');
+                    return;
+                }
+                
+                if (minNum < 1 || maxNum < 1) {
+                    alert('1以上の値を入力してください。');
+                    return;
+                }
+
+                const selectedNumber = getRandomUniqueNumber(minNum, maxNum);
+                
+                if (selectedNumber === null) {
+                    setIsComplete(true);
+                    setQrCodeNumber(null);
+                } else {
+                    setUsedNumbers(prev => [...prev, selectedNumber]);
+                    setDrawnNumber(selectedNumber);
+                    setQrCodeNumber(selectedNumber);
+                    
+                    // 残り数をチェック
+                    const newUsedNumbers = [...usedNumbers, selectedNumber];
+                    const totalNumbers = maxNum - minNum + 1;
+                    if (newUsedNumbers.length >= totalNumbers) {
+                        setIsComplete(true);
+                    }
+                }
+            };
+
+            // リセット機能
+            const resetDraw = () => {
+                setUsedNumbers([]);
+                setDrawnNumber(null);
+                setQrCodeNumber(null);
+                setIsComplete(false);
+            };
+
+            return (
+                <div className="container">
+                    <h1>🎯 くじ引きアプリ</h1>
+                    
+                    <Settings 
+                        minNum={minNum}
+                        maxNum={maxNum}
+                        onMinChange={setMinNum}
+                        onMaxChange={setMaxNum}
+                    />
+                    
+                    <button 
+                        onClick={drawNumber} 
+                        disabled={isComplete}
+                    >
+                        くじを引く
+                    </button>
+                    <button id="reset-btn" onClick={resetDraw}>リセット</button>
+                    
+                    <Result 
+                        drawnNumber={drawnNumber}
+                        isComplete={isComplete}
+                        qrCodeNumber={qrCodeNumber}
+                    />
+                    
+                    <div className="remaining">
+                        残り: {getRemainingCount()} 個
+                    </div>
+
+                    <History usedNumbers={usedNumbers} />
+                </div>
+            );
+        };
+
+        // アプリをレンダリング
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<LotteryApp />);
+    </script>
+
+  </body>
+</html>
